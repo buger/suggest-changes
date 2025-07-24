@@ -151,6 +151,7 @@ export async function run() {
 
   // Handle both pull_request and issue_comment events
   let pull_number
+  let isCommentEvent = false
   if (eventPayload.pull_request) {
     // pull_request event
     pull_number = Number(eventPayload.pull_request.number)
@@ -158,18 +159,28 @@ export async function run() {
     // issue_comment event - could be on issue or pull request
     // GitHub treats pull requests as issues, so we use issue.number
     pull_number = Number(eventPayload.issue.number)
+    isCommentEvent = true
   } else {
     throw new Error('Event payload must contain either pull_request or issue')
   }
 
-  const pullRequestFiles = (
-    await octokit.pulls.listFiles({ owner, repo, pull_number })
-  ).data.map((file) => file.filename)
+  // Get PR details to get the head SHA for comment events
+  const pullRequest = await octokit.pulls.get({ owner, repo, pull_number })
+  
+  // For comment events, checkout the PR head to get the correct diff
+  if (isCommentEvent) {
+    await getExecOutput('git', ['fetch', 'origin', `pull/${pull_number}/head`], { silent: true })
+    await getExecOutput('git', ['checkout', pullRequest.data.head.sha], { silent: true })
+  }
+
+  const pullRequestFiles = pullRequest.data.changed_files > 0 
+    ? (await octokit.pulls.listFiles({ owner, repo, pull_number })).data.map((file) => file.filename)
+    : []
 
   // Get the diff between the head branch and the base branch (limit to the files in the pull request)
   const diff = await getExecOutput(
     'git',
-    ['diff', '--unified=1', '--', ...pullRequestFiles],
+    ['diff', '--unified=1', `${pullRequest.data.base.sha}...${pullRequest.data.head.sha}`, '--', ...pullRequestFiles],
     { silent: true }
   )
 
