@@ -54712,23 +54712,16 @@ async function run() {
     throw new Error('Event payload must contain either pull_request or issue')
   }
 
-  // Get PR details to get the head SHA for comment events
-  const pullRequest = await octokit.pulls.get({ owner, repo, pull_number })
-  
-  // For comment events, checkout the PR head to get the correct diff
-  if (isCommentEvent) {
-    await (0,_actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput)('git', ['fetch', 'origin', `pull/${pull_number}/head`], { silent: true })
-    await (0,_actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput)('git', ['checkout', pullRequest.data.head.sha], { silent: true })
-  }
+  const pullRequestFiles = (
+    await octokit.pulls.listFiles({ owner, repo, pull_number })
+  ).data.map((file) => file.filename)
 
-  const pullRequestFiles = pullRequest.data.changed_files > 0 
-    ? (await octokit.pulls.listFiles({ owner, repo, pull_number })).data.map((file) => file.filename)
-    : []
-
-  // Get the diff between the head branch and the base branch (limit to the files in the pull request)
+  // Get the diff between the current working directory and HEAD (for working directory changes)
+  // This works for both pull_request events (where we're on the PR branch) and 
+  // issue_comment events (where changes have been generated in the working directory)
   const diff = await (0,_actions_exec__WEBPACK_IMPORTED_MODULE_1__.getExecOutput)(
     'git',
-    ['diff', '--unified=1', `${pullRequest.data.base.sha}...${pullRequest.data.head.sha}`, '--', ...pullRequestFiles],
+    ['diff', '--unified=1', '--', ...pullRequestFiles],
     { silent: true }
   )
 
