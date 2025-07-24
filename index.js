@@ -145,12 +145,22 @@ export async function run() {
 
   const [owner, repo] = String(env.GITHUB_REPOSITORY).split('/')
 
-  /** @type {import("@octokit/webhooks-types").PullRequestEvent} */
   const eventPayload = JSON.parse(
     readFileSync(String(env.GITHUB_EVENT_PATH), 'utf8')
   )
 
-  const pull_number = Number(eventPayload.pull_request.number)
+  // Handle both pull_request and issue_comment events
+  let pull_number
+  if (eventPayload.pull_request) {
+    // pull_request event
+    pull_number = Number(eventPayload.pull_request.number)
+  } else if (eventPayload.issue) {
+    // issue_comment event - could be on issue or pull request
+    // GitHub treats pull requests as issues, so we use issue.number
+    pull_number = Number(eventPayload.issue.number)
+  } else {
+    throw new Error('Event payload must contain either pull_request or issue')
+  }
 
   const pullRequestFiles = (
     await octokit.pulls.listFiles({ owner, repo, pull_number })
