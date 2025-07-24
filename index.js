@@ -179,6 +179,12 @@ export async function run() {
 
   debug(`Diff output: ${diff.stdout}`)
 
+  // Check if there are any changes in the diff
+  if (!diff.stdout || diff.stdout.trim() === '') {
+    debug('No changes found in diff output, skipping review creation')
+    return
+  }
+
   // Create an array of changes from the diff output based on patches
   const parsedDiff = parseGitDiff(diff.stdout)
 
@@ -186,6 +192,12 @@ export async function run() {
   const changedFiles = parsedDiff.files.filter(
     (file) => file.type === 'ChangedFile'
   )
+
+  // Exit early if no changed files
+  if (changedFiles.length === 0) {
+    debug('No changed files found, skipping review creation')
+    return
+  }
 
   // Fetch existing review comments
   const existingComments = (

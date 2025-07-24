@@ -54727,6 +54727,12 @@ async function run() {
 
   ;(0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)(`Diff output: ${diff.stdout}`)
 
+  // Check if there are any changes in the diff
+  if (!diff.stdout || diff.stdout.trim() === '') {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)('No changes found in diff output, skipping review creation')
+    return
+  }
+
   // Create an array of changes from the diff output based on patches
   const parsedDiff = (0,parse_git_diff__WEBPACK_IMPORTED_MODULE_4__/* ["default"] */ .A)(diff.stdout)
 
@@ -54734,6 +54740,12 @@ async function run() {
   const changedFiles = parsedDiff.files.filter(
     (file) => file.type === 'ChangedFile'
   )
+
+  // Exit early if no changed files
+  if (changedFiles.length === 0) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)('No changed files found, skipping review creation')
+    return
+  }
 
   // Fetch existing review comments
   const existingComments = (
