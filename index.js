@@ -1,6 +1,6 @@
 // @ts-check
 
-import { debug, getInput } from '@actions/core'
+import { debug, getInput, info } from '@actions/core'
 import { getExecOutput } from '@actions/exec'
 import { Octokit } from '@octokit/action'
 
@@ -168,6 +168,8 @@ export async function run() {
     await octokit.pulls.listFiles({ owner, repo, pull_number })
   ).data.map((file) => file.filename)
 
+  info(`Found ${pullRequestFiles.length} files in PR: ${pullRequestFiles.join(', ')}`)
+
   // Get the diff between the current working directory and HEAD (for working directory changes)
   // This works for both pull_request events (where we're on the PR branch) and 
   // issue_comment events (where changes have been generated in the working directory)
@@ -193,6 +195,8 @@ export async function run() {
     (file) => file.type === 'ChangedFile'
   )
 
+  info(`Found ${changedFiles.length} changed files with diffs: ${changedFiles.map(f => f.path).join(', ')}`)
+
   // Exit early if no changed files
   if (changedFiles.length === 0) {
     debug('No changed files found, skipping review creation')
@@ -208,12 +212,17 @@ export async function run() {
   const existingCommentKeys = new Set(existingComments.map(generateCommentKey))
 
   // Create an array of comments with suggested changes for each chunk of each changed file
-  const comments = changedFiles.flatMap(({ path, chunks }) =>
-    chunks.flatMap((chunk) => processChunk(path, chunk, existingCommentKeys))
-  )
+  const comments = changedFiles.flatMap(({ path, chunks }) => {
+    const fileComments = chunks.flatMap((chunk) => processChunk(path, chunk, existingCommentKeys))
+    if (fileComments.length > 0) {
+      info(`Created ${fileComments.length} suggestion(s) for ${path}`)
+    }
+    return fileComments
+  })
 
   // Create a review with the suggested changes if there are any
   if (comments.length > 0) {
+    info(`Submitting review with ${comments.length} total suggestion(s)`)
     const event = validateEvent(getInput('event').toUpperCase() || 'COMMENT')
     await octokit.pulls.createReview({
       owner,
@@ -223,6 +232,9 @@ export async function run() {
       body: getInput('comment'),
       comments,
     })
+    info('Review submitted successfully')
+  } else {
+    info('No suggestions to submit - all potential suggestions already exist or no valid changes found')
   }
 }
 
