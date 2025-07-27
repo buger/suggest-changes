@@ -54716,6 +54716,8 @@ async function run() {
     await octokit.pulls.listFiles({ owner, repo, pull_number })
   ).data.map((file) => file.filename)
 
+  ;(0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Found ${pullRequestFiles.length} files in PR: ${pullRequestFiles.join(', ')}`)
+
   // Get the diff between the current working directory and HEAD (for working directory changes)
   // This works for both pull_request events (where we're on the PR branch) and 
   // issue_comment events (where changes have been generated in the working directory)
@@ -54741,6 +54743,8 @@ async function run() {
     (file) => file.type === 'ChangedFile'
   )
 
+  ;(0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Found ${changedFiles.length} changed files with diffs: ${changedFiles.map(f => f.path).join(', ')}`)
+
   // Exit early if no changed files
   if (changedFiles.length === 0) {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.debug)('No changed files found, skipping review creation')
@@ -54756,12 +54760,17 @@ async function run() {
   const existingCommentKeys = new Set(existingComments.map(generateCommentKey))
 
   // Create an array of comments with suggested changes for each chunk of each changed file
-  const comments = changedFiles.flatMap(({ path, chunks }) =>
-    chunks.flatMap((chunk) => processChunk(path, chunk, existingCommentKeys))
-  )
+  const comments = changedFiles.flatMap(({ path, chunks }) => {
+    const fileComments = chunks.flatMap((chunk) => processChunk(path, chunk, existingCommentKeys))
+    if (fileComments.length > 0) {
+      (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Created ${fileComments.length} suggestion(s) for ${path}`)
+    }
+    return fileComments
+  })
 
   // Create a review with the suggested changes if there are any
   if (comments.length > 0) {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)(`Submitting review with ${comments.length} total suggestion(s)`)
     const event = validateEvent((0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)('event').toUpperCase() || 'COMMENT')
     await octokit.pulls.createReview({
       owner,
@@ -54771,6 +54780,9 @@ async function run() {
       body: (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput)('comment'),
       comments,
     })
+    ;(0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)('Review submitted successfully')
+  } else {
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__.info)('No suggestions to submit - all potential suggestions already exist or no valid changes found')
   }
 }
 
