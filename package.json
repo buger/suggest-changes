@@ -6,17 +6,20 @@
   },
   "scripts": {
     "build": "ncc build",
-    "test": "node --test"
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "test:watch": "node --test --watch",
+    "test:update-snapshots": "node --test --test-update-snapshots"
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
     "@actions/exec": "^1.1.1",
-    "@octokit/action": "^8.0.1",
+    "@octokit/action": "^8.0.2",
     "parse-git-diff": "^0.0.19"
   },
   "devDependencies": {
     "@octokit/webhooks-types": "^7.6.1",
-    "@types/node": "^22.15.21",
+    "@types/node": "^24.1.0",
     "@vercel/ncc": "^0.38.3"
   },
   "prettier": {
@@ -28,5 +31,5 @@
       "main"
     ]
   },
-  "version": "2.0.1"
+  "version": "2.0.5"
 }

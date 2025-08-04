@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.0.5](https://github.com/parkerbxyz/suggest-changes/compare/v2.0.4...v2.0.5) (2025-07-29)
+
+
+### Bug Fixes
+
+* change grouping and deletion separation logic ([#83](https://github.com/parkerbxyz/suggest-changes/issues/83)) ([bd09077](https://github.com/parkerbxyz/suggest-changes/commit/bd090778fb533b461b02565c499b0cd188f21f4b))
+
+## [2.0.4](https://github.com/parkerbxyz/suggest-changes/compare/v2.0.3...v2.0.4) (2025-07-29)
+
+
+### Bug Fixes
+
+* improve review comment line positioning and deleted line handling ([#81](https://github.com/parkerbxyz/suggest-changes/issues/81)) ([47649b1](https://github.com/parkerbxyz/suggest-changes/commit/47649b1df8c372a0fdc871480791e1673159b6b6))
+
+## [2.0.3](https://github.com/parkerbxyz/suggest-changes/compare/v2.0.2...v2.0.3) (2025-07-28)
+
+
+### Bug Fixes
+
+* improve line positioning for review comments ([#78](https://github.com/parkerbxyz/suggest-changes/issues/78)) ([c8ecf14](https://github.com/parkerbxyz/suggest-changes/commit/c8ecf14ac169d70597e47d319204f132ff47b0c9))
+
+## [2.0.2](https://github.com/parkerbxyz/suggest-changes/compare/v2.0.1...v2.0.2) (2025-07-25)
+
+
+### Bug Fixes
+
+* **deps:** bump @octokit/action from 8.0.1 to 8.0.2 ([#71](https://github.com/parkerbxyz/suggest-changes/issues/71)) ([705eeae](https://github.com/parkerbxyz/suggest-changes/commit/705eeae2f0f3ca8fe6b0e67c20648457266f1b30))
+* update suggestion line range calculation ([#72](https://github.com/parkerbxyz/suggest-changes/issues/72)) ([4492e05](https://github.com/parkerbxyz/suggest-changes/commit/4492e05c5f41709a0998515edda56c02758f9237))
+
 ## [2.0.1](https://github.com/parkerbxyz/suggest-changes/compare/v2.0.0...v2.0.1) (2025-05-21)
 
 
