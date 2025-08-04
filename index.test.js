@@ -79,7 +79,7 @@ describe('createMultiLineComment', () => {
 
     assert.strictEqual(result.path, 'test.js')
     assert.strictEqual(result.start_line, 3)
-    assert.strictEqual(result.line, 6) // start + lines - 1 = 3 + 4 - 1 = 6
+    assert.strictEqual(result.line, 5) // 3 non-deleted lines: start + (3 - 1) = 3 + 2 = 5
     assert.strictEqual(result.start_side, 'RIGHT')
     assert.strictEqual(result.side, 'RIGHT')
     assert.strictEqual(
@@ -88,23 +88,61 @@ describe('createMultiLineComment', () => {
     )
   })
 
-  test('should calculate correct line ranges for various scenarios', () => {
+  test('should calculate correct line ranges with deleted lines', () => {
     const path = 'test.js'
-    const changes = [{ type: 'AddedLine', content: 'test' }]
-
-    // Test different line range calculations
-    const testCases = [
-      { start: 1, lines: 3, expectedEnd: 3 },
-      { start: 10, lines: 5, expectedEnd: 14 },
-      { start: 20, lines: 1, expectedEnd: 20 },
+    
+    // Test case with deleted lines (the bug scenario)
+    const changesWithDeletions = [
+      { type: 'UnchangedLine', content: 'import logging' },
+      { type: 'DeletedLine', content: '_log = logger.get_logger()' }, // This doesn't exist in current file
+      { type: 'AddedLine', content: '_log = logger.get_logger(name="test")' },
+      { type: 'AddedLine', content: '' },
+      { type: 'UnchangedLine', content: 'def main():' },
     ]
+    
+    const toFileRange = { start: 13, lines: 5 } // 5 lines in diff chunk
+    const result = createMultiLineComment(path, toFileRange, changesWithDeletions)
+    
+    // Should count only non-deleted lines: 2 UnchangedLine + 2 AddedLine = 4
+    // endLine = 13 + (4 - 1) = 16
+    assert.strictEqual(result.start_line, 13)
+    assert.strictEqual(result.line, 16)
+  })
 
-    testCases.forEach(({ start, lines, expectedEnd }) => {
-      const toFileRange = { start, lines }
-      const result = createMultiLineComment(path, toFileRange, changes)
-      assert.strictEqual(result.start_line, start)
-      assert.strictEqual(result.line, expectedEnd)
-    })
+  test('should handle edge case with only deleted lines', () => {
+    const path = 'test.js'
+    const changesOnlyDeleted = [
+      { type: 'DeletedLine', content: 'removed line 1' },
+      { type: 'DeletedLine', content: 'removed line 2' },
+    ]
+    
+    const toFileRange = { start: 5, lines: 2 }
+    const result = createMultiLineComment(path, toFileRange, changesOnlyDeleted)
+    
+    // No non-deleted lines, so endLine = 5 + max(0, 0 - 1) = 5 + 0 = 5
+    assert.strictEqual(result.start_line, 5)
+    assert.strictEqual(result.line, 5)
+  })
+
+  test('should handle mixed changes correctly', () => {
+    const path = 'test.js'
+    const mixedChanges = [
+      { type: 'UnchangedLine', content: 'start' },
+      { type: 'DeletedLine', content: 'old code 1' },
+      { type: 'DeletedLine', content: 'old code 2' },
+      { type: 'AddedLine', content: 'new code 1' },
+      { type: 'AddedLine', content: 'new code 2' },
+      { type: 'AddedLine', content: 'new code 3' },
+      { type: 'UnchangedLine', content: 'end' },
+    ]
+    
+    const toFileRange = { start: 10, lines: 7 }
+    const result = createMultiLineComment(path, toFileRange, mixedChanges)
+    
+    // Non-deleted lines: 2 UnchangedLine + 3 AddedLine = 5
+    // endLine = 10 + (5 - 1) = 14
+    assert.strictEqual(result.start_line, 10)
+    assert.strictEqual(result.line, 14)
   })
 })
 
@@ -225,9 +263,10 @@ describe('Integration tests for the fix', () => {
     // Should create multi-line comment with correct line positioning
     const comment = createMultiLineComment(path, toFileRange, changes)
 
-    // Line positions should reference current file state (13-18)
+    // Line positions should reference current file state
+    // Non-deleted lines: 2 UnchangedLine + 6 AddedLine = 8
     assert.strictEqual(comment.start_line, 13)
-    assert.strictEqual(comment.line, 18) // 13 + 6 - 1 = 18
+    assert.strictEqual(comment.line, 20) // 13 + (8 - 1) = 20
     assert.strictEqual(comment.start_side, 'RIGHT')
     assert.strictEqual(comment.side, 'RIGHT')
 

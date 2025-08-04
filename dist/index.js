@@ -54594,12 +54594,18 @@ function createSingleLineComment(path, toFileRange, changes) {
  * @returns {Object} - Comment object for GitHub API
  */
 function createMultiLineComment(path, toFileRange, changes) {
+  // Count only lines that exist in the current file state (non-deleted)
+  const currentFileLines = changes.filter(
+    change => change.type === 'AddedLine' || change.type === 'UnchangedLine'
+  ).length;
+  
+  // Calculate end line based on actual content in current file
+  const endLine = toFileRange.start + Math.max(0, currentFileLines - 1);
+  
   return {
     path,
     start_line: toFileRange.start,
-    // The last line of the chunk is the start line plus the number of lines in the chunk
-    // minus 1 to account for the start line being included in toFileRange.lines
-    line: toFileRange.start + toFileRange.lines - 1,
+    line: endLine,
     start_side: 'RIGHT',
     side: 'RIGHT',
     body: generateSuggestionBody(changes),
