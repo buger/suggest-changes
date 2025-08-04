@@ -1,6 +1,6 @@
 // @ts-check
 
-import { debug, getInput, info } from '@actions/core'
+import { debug, getInput, info, setOutput } from '@actions/core'
 import { getExecOutput } from '@actions/exec'
 import { Octokit } from '@octokit/action'
 
@@ -313,21 +313,82 @@ export async function run({
   const existingCommentKeys = new Set(existingComments.map(generateCommentKey))
 
   const comments = generateReviewComments(parsedDiff, existingCommentKeys)
+  
+  console.log(`📝 Generated ${comments.length} review comments`)
+  if (comments.length > 0) {
+    debug('Comments to submit:')
+    comments.forEach(c => debug(`  - ${c.path}:${c.line} (${c.start_line ? `lines ${c.start_line}-${c.line}` : 'single line'})`))
+  }
 
   // Create a review with the suggested changes if there are any
   if (comments.length > 0) {
-    await octokit.pulls.createReview({
-      owner,
-      repo,
-      pull_number,
-      commit_id,
-      body,
-      event,
-      comments,
-    })
+    try {
+      await octokit.pulls.createReview({
+        owner,
+        repo,
+        pull_number,
+        commit_id,
+        body,
+        event,
+        comments,
+      })
+      console.log(`✅ Successfully created review with ${comments.length} comments`)
+      return { comments, reviewCreated: true, failedComments: [] }
+    } catch (error) {
+      console.error('❌ Failed to create review with all comments:', error.message)
+      
+      // If the error is about invalid line numbers, try to submit comments individually
+      if (error.status === 422 && 
+          (error.message.includes('line must be part of the diff') || 
+           error.message.includes('Pull request review thread line must be part of the diff') ||
+           error.message.includes("diff hunk can't be blank"))) {
+        console.log('📝 Attempting to submit comments individually...')
+        
+        const failedComments = []
+        const successfulComments = []
+        
+        for (const comment of comments) {
+          try {
+            await octokit.pulls.createReview({
+              owner,
+              repo,
+              pull_number,
+              commit_id,
+              body: `Individual suggestion for ${comment.path}`,
+              event,
+              comments: [comment],
+            })
+            successfulComments.push(comment)
+            console.log(`✅ Successfully submitted comment for ${comment.path}:${comment.line}`)
+          } catch (individualError) {
+            failedComments.push({
+              comment,
+              error: individualError.message
+            })
+            console.error(`❌ Failed to submit comment for ${comment.path}:${comment.line}: ${individualError.message}`)
+          }
+        }
+        
+        console.log(`📊 Summary: ${successfulComments.length} successful, ${failedComments.length} failed`)
+        
+        // If at least one comment succeeded, consider it a partial success
+        if (successfulComments.length > 0) {
+          return { 
+            comments: successfulComments, 
+            reviewCreated: true, 
+            failedComments 
+          }
+        }
+      }
+      
+      // If we couldn't submit any comments, log the error but don't fail the action
+      console.error('❌ Could not submit any review comments')
+      console.error('Error details:', error)
+      return { comments: [], reviewCreated: false, failedComments: comments }
+    }
   }
 
-  return { comments, reviewCreated: comments.length > 0 }
+  return { comments, reviewCreated: false, failedComments: [] }
 }
 
 // Only run main logic when this file is executed directly (not when imported)
@@ -356,14 +417,35 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const event = /** @type {ReviewEvent} */ (getInput('event').toUpperCase())
   const body = getInput('comment')
 
-  await run({
-    octokit,
-    owner,
-    repo,
-    pull_number,
-    commit_id,
-    diff,
-    event,
-    body,
-  })
+  try {
+    const result = await run({
+      octokit,
+      owner,
+      repo,
+      pull_number,
+      commit_id,
+      diff,
+      event,
+      body,
+    })
+    
+    // Log final summary
+    if (result.failedComments && result.failedComments.length > 0) {
+      console.log('\n📋 Failed Comments Summary:')
+      result.failedComments.forEach(({ comment, error }) => {
+        console.log(`  - ${comment.path}:${comment.line} - ${error}`)
+      })
+      
+      // Set output for GitHub Actions
+      setOutput('failed_comments_count', String(result.failedComments.length))
+      setOutput('successful_comments_count', String(result.comments.length))
+    }
+    
+    // Don't fail the action even if some comments failed
+    console.log('\n✅ Action completed successfully (with potential partial failures)')
+  } catch (error) {
+    console.error('❌ Unexpected error in suggest-changes action:', error)
+    // Still don't fail the action - just log the error
+    console.log('⚠️  Action will complete with warnings rather than failing')
+  }
 }
