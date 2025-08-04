@@ -393,31 +393,50 @@ export async function run({
 
 // Only run main logic when this file is executed directly (not when imported)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const octokit = new Octokit({
-    userAgent: 'suggest-changes',
-  })
-
-  const [owner, repo] = String(env.GITHUB_REPOSITORY).split('/')
-
-  /** @type {PullRequestEvent} */
-  const eventPayload = JSON.parse(
-    readFileSync(String(env.GITHUB_EVENT_PATH), 'utf8')
-  )
-
-  const pull_number = Number(eventPayload.pull_request.number)
-  const commit_id = eventPayload.pull_request.head.sha
-
-  const pullRequestFiles = (
-    await octokit.pulls.listFiles({ owner, repo, pull_number })
-  ).data.map((file) => file.filename)
-
-  // Get the diff between the head branch and the base branch (limit to the files in the pull request)
-  const diff = await getGitDiff(['--', ...pullRequestFiles])
-
-  const event = /** @type {ReviewEvent} */ (getInput('event').toUpperCase())
-  const body = getInput('comment')
-
   try {
+    const octokit = new Octokit({
+      userAgent: 'suggest-changes',
+    })
+
+    const [owner, repo] = String(env.GITHUB_REPOSITORY).split('/')
+
+    const eventPayload = JSON.parse(
+      readFileSync(String(env.GITHUB_EVENT_PATH), 'utf8')
+    )
+    
+    // Determine the event type and extract PR information accordingly
+    let pull_number, commit_id
+    
+    if (env.GITHUB_EVENT_NAME === 'issue_comment' && eventPayload.issue?.pull_request) {
+      // This is a comment on a PR
+      pull_number = Number(eventPayload.issue.number)
+      
+      // For issue_comment events, we need to fetch the PR data to get the commit SHA
+      const pullRequest = await octokit.pulls.get({ owner, repo, pull_number })
+      commit_id = pullRequest.data.head.sha
+      
+      console.log(`📋 Processing PR comment event for PR #${pull_number}`)
+    } else if (eventPayload.pull_request) {
+      // This is a direct PR event
+      pull_number = Number(eventPayload.pull_request.number)
+      commit_id = eventPayload.pull_request.head.sha
+      
+      console.log(`📋 Processing pull request event for PR #${pull_number}`)
+    } else {
+      throw new Error(`Unsupported event type: ${env.GITHUB_EVENT_NAME}. This action only supports pull_request and issue_comment events.`)
+    }
+
+    const pullRequestFiles = (
+      await octokit.pulls.listFiles({ owner, repo, pull_number })
+    ).data.map((file) => file.filename)
+
+    // Get the diff between the head branch and the base branch (limit to the files in the pull request)
+    const diff = await getGitDiff(['--', ...pullRequestFiles])
+
+    const event = /** @type {ReviewEvent} */ (getInput('event').toUpperCase())
+    const body = getInput('comment')
+
+    try {
     const result = await run({
       octokit,
       owner,
@@ -447,5 +466,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error('❌ Unexpected error in suggest-changes action:', error)
     // Still don't fail the action - just log the error
     console.log('⚠️  Action will complete with warnings rather than failing')
+  }
+  } catch (error) {
+    console.error('❌ Critical error in suggest-changes action initialization:', error)
+    console.error('Event type:', env.GITHUB_EVENT_NAME)
+    console.error('Event payload structure:', JSON.stringify(eventPayload || {}, null, 2))
+    console.log('⚠️  Action failed to initialize properly. Please check the event type and payload.')
+    // Exit gracefully without throwing
+    process.exit(0)
   }
 }
